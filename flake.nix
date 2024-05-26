@@ -22,9 +22,6 @@
         devShells.default = pkgs.devshell.mkShell rec {
 	  name = "doink";
 	  inherit packages;
-	  devshell.startup."setprompt" = pkgs.lib.noDepEntry ''
-	    export LP_MARK_PREFIX=" (doink) "
-	  '';
 	  devshell.startup."printpackages" = pkgs.lib.noDepEntry ''
 	    echo "[[ Packages ]]"
 	    echo "${builtins.concatStringsSep "\n" (builtins.map (p: p.name) packages)}"
