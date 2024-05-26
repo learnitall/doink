@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "doink"
+version = "0.1.0"
+description = "Distributed Objects In Kafka"
+authors = ["Ryan Drew <learnitall0@gmail.com>"]
+license = "Apache-2.0 License"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
