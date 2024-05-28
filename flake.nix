@@ -8,26 +8,27 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
-	  inherit system;
-	  overlays = [
-	    devshell.overlays.default
-	  ];
-	};
-	packages = with pkgs; [
-	  poetry
-	  python312
-	];
+      inherit system;
+      overlays = [
+        devshell.overlays.default
+      ];
+    };
+    packages = with pkgs; [
+      gcc9
+      poetry
+      python312
+    ];
       in
       {
         devShells.default = pkgs.devshell.mkShell rec {
-	  name = "doink";
-	  inherit packages;
-	  devshell.startup."printpackages" = pkgs.lib.noDepEntry ''
-	    echo "[[ Packages ]]"
-	    echo "${builtins.concatStringsSep "\n" (builtins.map (p: p.name) packages)}"
-	    echo ""
-	  '';
-	};
+      name = "doink";
+      inherit packages;
+      devshell.startup."printpackages" = pkgs.lib.noDepEntry ''
+        echo "[[ Packages ]]"
+        echo "${builtins.concatStringsSep "\n" (builtins.map (p: p.name) packages)}"
+        echo ""
+      '';
+    };
       }
     );
 }
