@@ -1,10 +1,11 @@
-"""Test functionality of stuff in objects.py."""
+"""Test functionality of stuff in shared.py."""
 
 import uuid
 
 import pytest
 
-from doink import objects
+from doink.kafka import KafkaHandler
+from doink.shared import SharedObject
 
 
 class TestSharedObject:
@@ -15,12 +16,12 @@ class TestSharedObject:
     def shared_object():
         """Create a child class of SharedObject for testing."""
 
-        handler = objects.KafkaHandler("topic")
+        handler = KafkaHandler("topic")
         handler.start()
 
         uid = str(uuid.uuid4())
 
-        class MySharedObject(objects.SharedObject):
+        class MySharedObject(SharedObject):
             """Test child of SharedObject."""
 
             def __init__(self):
