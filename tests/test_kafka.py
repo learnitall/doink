@@ -1,9 +1,7 @@
 """Test functionality of stuff in kafka.py."""
 
-import time
+import threading
 import uuid
-
-import pytest
 
 from doink.kafka import KafkaHandler, ObjectUpdate
 
@@ -31,6 +29,46 @@ class TestKafkaHandler:
         handler.stop()
 
     # pylint: disable=redefined-outer-name,unused-argument
+    def test_kafka_handler_can_materialize_state_from_updates(
+        self, mock_kafka
+    ):
+        """Test the KafkaHandler can construct object state."""
+
+        handler = KafkaHandler("topic")
+        handler.start()
+
+        obj_uid = str(uuid.uuid4())
+        owner_uid = "0"
+
+        obj = {"key": "value"}
+
+        event = threading.Event()
+
+        def callback(_):
+            event.set()
+
+        handler.register(obj_uid, callback)
+
+        handler.update(owner_uid, obj_uid, obj)
+        event.wait()
+        assert handler.get(obj_uid) == {"key": "value"}
+        event.clear()
+
+        obj["key"] = "a different value"
+        handler.update(owner_uid, obj_uid, obj)
+        event.wait()
+        assert handler.get(obj_uid) == {"key": "a different value"}
+        event.clear()
+
+        obj = {"key": "value1", "key2": "second value"}
+        handler.update(owner_uid, obj_uid, obj)
+        event.wait()
+        for key, value in handler.get(obj_uid).items():
+            assert obj.get(key, None) is not None
+            assert value == obj.get(key)
+        event.clear()
+
+    # pylint: disable=redefined-outer-name,unused-argument
     def test_kafka_handler_can_trigger_callbacks(self, mock_kafka):
         """Test the KafkaHandler triggers callbacks when appropriate."""
 
@@ -38,32 +76,28 @@ class TestKafkaHandler:
         owner_uid = "0"
         # Use a list rather than an integer, so we can mutate the
         # variable inside the scope of the callback function
-        success_counter = []
-        error_counter = []
-
-        def wait_on_counter(counter, n):
-            start = time.time()
-
-            while len(counter) != n:
-                time.sleep(0.1)
-                if time.time() - start > 1:
-                    raise TimeoutError(
-                        "Counter did not increment enough within the timeout"
-                    )
+        successes = []
+        errors = []
+        event = threading.Event()
 
         def callback(object_update: ObjectUpdate):
             if object_update.obj_uid != obj_uid:
                 # This condition should never be hit.
-                error_counter.append(ValueError("incorrect uid"))
+                errors.append(ValueError("incorrect uid"))
+                event.set()
 
             if len(object_update.value) != 1:
-                error_counter.append(ValueError("incorrect length"))
+                errors.append(ValueError("incorrect length"))
+                event.set()
 
             v = object_update.value.get("key", None)
             if v != "value":
-                error_counter.append(ValueError("incorrect value"))
+                errors.append(ValueError("incorrect value"))
+                event.set()
 
-            success_counter.append(0)
+            successes.append(0)
+            if len(successes) == 10:
+                event.set()
 
         handler = KafkaHandler(str(obj_uid))
         handler.start()
@@ -71,22 +105,25 @@ class TestKafkaHandler:
 
         for _ in range(10):
             handler.update(owner_uid, obj_uid, {"key": "value"})
+        assert event.wait(1) is True
+        assert len(errors) == 0
 
-        wait_on_counter(success_counter, 10)
-        assert len(error_counter) == 0
-
+        event.clear()
         handler.update(owner_uid, obj_uid + "_extra", {"key": "value"})
-        with pytest.raises(TimeoutError):
-            wait_on_counter(error_counter, 1)
+        assert event.wait(1) is False
 
+        errors = []
+        event.clear()
         handler.update(owner_uid, obj_uid, {"key": "value", "key2": "value2"})
-        wait_on_counter(error_counter, 1)
-        assert str(error_counter.pop()) == str(ValueError("incorrect length"))
+        event.wait(1)
+        assert str(errors.pop()) == str(ValueError("incorrect length"))
 
+        event.clear()
         handler.update(owner_uid, obj_uid, {"key": "not value"})
-        wait_on_counter(error_counter, 1)
-        assert str(error_counter.pop()) == str(ValueError("incorrect value"))
+        event.wait(1)
+        assert str(errors.pop()) == str(ValueError("incorrect value"))
 
+        event.clear()
         handler.update(owner_uid, obj_uid, {"not key": "value"})
-        wait_on_counter(error_counter, 1)
-        assert str(error_counter.pop()) == str(ValueError("incorrect value"))
+        event.wait(1)
+        assert str(errors.pop()) == str(ValueError("incorrect value"))

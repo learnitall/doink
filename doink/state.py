@@ -2,6 +2,9 @@
 
 import json
 from dataclasses import asdict, dataclass
+from typing import Any
+
+SharableObjectType = dict[str, list | tuple | str | int | float | bool | None]
 
 
 def dataclass_from_json(cls, j: str | bytes):
@@ -45,47 +48,52 @@ def dataclass_instance_to_json(s) -> str:
     return json.dumps(asdict(s))
 
 
-@dataclass
-class ObjectUpdate:
+def validate_object_value(obj: Any):
     """
-    ObjectUpdate is a serializable container for update messages.
+    Validate the given object is shareable.
 
-    Value must be a dict of strings mapped to JSON encodeable values.
+    This function raises a TypeError if the given object is not
+    able to be shared. An object must meet the following requirements
+    to be shareable:
+
+    1. Is a dictionary.
+    2. Keys in the dictionary are strings.
+    3. Values must be a list, tuple, str, int, float, bool or None.
     """
 
-    obj_uid: str
-    owner_uid: str
-    value: dict[str, list | tuple | str | int | float | bool | None]
+    if not isinstance(obj, dict):
+        raise TypeError("value must be a dict")
+
+    for k, v in obj.items():
+        if not isinstance(k, str):
+            raise TypeError(f"Keys in value must be strings: {k}")
+
+        if v is None:
+            continue
+
+        valid = False
+        for t in (list, tuple, str, int, float, bool):
+            if isinstance(v, t):
+                valid = True
+                break
+
+        if not valid:
+            raise TypeError(f"Value in dict is of unsupported type: {v}")
+
+
+class _SerializableObjectContainer:
+    """Base class for creating dataclasses to hold serializable data."""
 
     def __setattr__(self, key, value):
         """__setattr__ performs input validation on the field 'value'."""
 
         if key == "value":
-            if not isinstance(value, dict):
-                raise TypeError("value must be a dict")
-
-            for k, v in value.items():
-                if not isinstance(k, str):
-                    raise TypeError(f"Keys in value must be strings: {k}")
-
-                if v is None:
-                    continue
-
-                valid = False
-                for t in (list, tuple, str, int, float, bool):
-                    if isinstance(v, t):
-                        valid = True
-                        break
-
-                if not valid:
-                    raise TypeError(
-                        f"Value in dict is of unsupported type: {v}"
-                    )
+            validate_object_value(value)
 
         self.__dict__[key] = value
 
     @classmethod
-    def from_json(cls, j: str | bytes) -> "ObjectUpdate":
+    def from_json(cls, j: str | bytes):
         """
         Create a new ObjectUpdate from the given JSON string.
 
@@ -97,3 +105,29 @@ class ObjectUpdate:
     def to_json(self) -> str:
         """Serialize the ObjectUpdate instance to a JSON string."""
         return dataclass_instance_to_json(self)
+
+
+@dataclass
+class ObjectUpdate(_SerializableObjectContainer):
+    """
+    ObjectUpdate is a serializable container for update messages.
+
+    Value must be a dict of strings mapped to JSON encodeable values.
+    """
+
+    obj_uid: str
+    owner_uid: str
+    value: SharableObjectType
+
+
+@dataclass
+class ObjectCheckpoint(_SerializableObjectContainer):
+    """
+    ObjectCheckpoint is a tool for checkpointing object state.
+
+    Value must be a dict of strings mapped to JSON encodeable values.
+    """
+
+    obj_uid: str
+    offset: int
+    value: SharableObjectType

@@ -111,7 +111,7 @@ class MockKafkaConsumer:
             for topic in self.mock_topics:
                 messages: List[Message] = self.mock_messages.get(topic)
                 if messages is not None and len(messages) > 0:
-                    return messages.pop()
+                    return messages.pop(0)
 
             # When we get to this point, we have no more
             # messages to send, because we returned them
